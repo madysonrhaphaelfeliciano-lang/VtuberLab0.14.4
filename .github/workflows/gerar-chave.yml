@@ -1,0 +1,28 @@
+name: gerar-chave
+# Roda UMA vez (Actions > gerar-chave > Run workflow). Cria a chave de assinatura do app.
+# Depois: copie os 4 valores para os Secrets do repositório, APAGUE o artefato e GUARDE uma cópia da chave em lugar seguro.
+on: workflow_dispatch
+jobs:
+  chave:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Gerar a chave
+        run: |
+          SENHA=$(openssl rand -hex 16)
+          keytool -genkeypair -keystore vtuberlab.jks -storetype PKCS12 -alias vtuberlab \
+            -keyalg RSA -keysize 4096 -validity 36500 -storepass "$SENHA" -keypass "$SENHA" \
+            -dname "CN=VTuber Lab, O=VTuber Lab, C=BR"
+          base64 -w0 vtuberlab.jks > KEYSTORE_BASE64.txt
+          printf 'KEYSTORE_PASSWORD=%s\nKEY_ALIAS=vtuberlab\nKEY_PASSWORD=%s\n' "$SENHA" "$SENHA" > SENHAS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chave-assinatura
+          path: |
+            KEYSTORE_BASE64.txt
+            SENHAS.txt
+            vtuberlab.jks
+          retention-days: 1
