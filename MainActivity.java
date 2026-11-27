@@ -576,7 +576,7 @@ public class MainActivity extends Activity {
     }
     private void showAddMenu(final AlertDialog[] dlg){
         final String lab=modelLabel();
-        newDialog().setTitle("Nova camada").setItems(new String[]{"Acessório (na frente do "+lab+")","Objeto (atrás do "+lab+")"},(d,w)->startAddObject(w==1,dlg)).show();
+        newDialog().setTitle("Nova camada").setItems(new String[]{"Acessório (gruda no "+lab+")","Objeto (fica fixo na tela)"},(d,w)->startAddObject(w==1,dlg)).show();
     }
     private void showModelMenu(final boolean on,final AlertDialog[] dlg){
         newDialog().setTitle(modelLabel()+" · "+currentModelName()).setItems(new String[]{on?"Desligar":"Ligar"},(d,w)->{dlg[0].dismiss();toggleOverlay();}).show();
@@ -625,23 +625,20 @@ public class MainActivity extends Activity {
         if(dim)r.setAlpha(0.55f);
         return r;
     }
-    private View accessoryItem(final OverlayService.AccInfo a,String name,final LinearLayout box,final ArrayList<OverlayService.AccInfo> order,final int pos,final Runnable rebuild){
+    private View accessoryItem(final OverlayService.AccInfo a,final String name,final LinearLayout box,final int pos,final int cnt,final int modelPos,final Runnable rebuild){
         LinearLayout r=layerItem(thumbImg(thumb(new File(a.path),96),ImageView.ScaleType.FIT_CENTER),name,false);
-        r.setOnClickListener(v->showLayerMenu(a,rebuild));
-        enableDrag(r,box,order,pos,a.back,rebuild);
+        r.setOnClickListener(v->showLayerMenu(a,name,rebuild));
+        enableDrag(r,box,pos,cnt,modelPos,a,rebuild);
         return r;
     }
-    private void showLayerMenu(final OverlayService.AccInfo a,final Runnable rebuild){
-        final String[] it={a.follow?"Fixar na tela":"Seguir o "+modelLabel(),a.back?"Mandar para a frente (Acessório)":"Mandar para trás (Objeto)","Remover"};
-        newDialog().setItems(it,(d,w)->{
-            if(w==0)OverlayService.setAccessoryFollow(a.id,!a.follow);
-            else if(w==1)OverlayService.setAccessoryBack(a.id,!a.back);
-            else OverlayService.removeAccessoryById(a.id);
-            ui.post(rebuild);
-        }).show();
+    private void showLayerMenu(final OverlayService.AccInfo a,String name,final Runnable rebuild){
+        newDialog().setTitle(name).setItems(new String[]{"Remover"},(d,w)->{OverlayService.removeAccessoryById(a.id);ui.post(rebuild);}).show();
     }
-    /** Segurar a linha e arrastar: reordena dentro do grupo (topo = mais na frente). */
-    private void enableDrag(final View row,final LinearLayout box,final ArrayList<OverlayService.AccInfo> order,final int pos,final boolean back,final Runnable rebuild){
+    /**
+     * Segurar a linha e arrastar: muda a ordem e, se passar pela linha do modelo, troca a camada
+     * (acima do modelo = Acessório, gruda nele; abaixo = Objeto, fixo). A paisagem fica sempre no fim e não entra.
+     */
+    private void enableDrag(final View row,final LinearLayout box,final int pos,final int cnt,final int modelPos,final OverlayService.AccInfo acc,final Runnable rebuild){
         final float[] startY={0};final boolean[] drag={false};final int[] target={pos};
         row.setOnLongClickListener(v->{
             drag[0]=true;target[0]=pos;
@@ -654,7 +651,7 @@ public class MainActivity extends Activity {
             int act=e.getActionMasked();
             if(act==MotionEvent.ACTION_DOWN){startY[0]=e.getRawY();return false;}
             if(!drag[0])return false;
-            int pitch=row.getHeight()+dp(6),cnt=box.getChildCount();
+            int pitch=row.getHeight()+dp(6);
             if(act==MotionEvent.ACTION_MOVE){
                 float dy=e.getRawY()-startY[0];
                 dy=Math.max(-pos*pitch,Math.min((cnt-1-pos)*pitch,dy));
@@ -676,10 +673,14 @@ public class MainActivity extends Activity {
                 row.setTranslationY(0);row.setElevation(0);row.setScaleX(1f);row.setScaleY(1f);
                 for(int i=0;i<cnt;i++){View c=box.getChildAt(i);c.animate().cancel();c.setTranslationY(0);}
                 if(act==MotionEvent.ACTION_UP&&target[0]!=pos){
-                    ArrayList<Integer> ids=new ArrayList<Integer>();
-                    for(OverlayService.AccInfo x:order)ids.add(x.id);
-                    Integer moved=ids.remove(pos);ids.add(target[0],moved);
-                    OverlayService.reorderAccessories(back,ids);
+                    // nova ordem das linhas: onde fica a linha do modelo decide o lado (frente/atrás)
+                    ArrayList<Integer> ord=new ArrayList<Integer>();
+                    for(int i=0;i<cnt;i++)ord.add(i);
+                    ord.remove(Integer.valueOf(pos));ord.add(target[0],pos);
+                    int newModel=ord.indexOf(modelPos);
+                    boolean back=target[0]>newModel;
+                    int fromTop=back?target[0]-newModel-1:target[0];
+                    OverlayService.placeAccessory(acc.id,back,fromTop);
                     ui.post(rebuild);
                 }
                 return true;
@@ -730,16 +731,15 @@ public class MainActivity extends Activity {
                 if(a.back){nb++;names.put(a.id,"Objeto"+(cb>1?" "+nb:""));}
                 else{nf++;names.put(a.id,"Acessório"+(cf>1?" "+nf:""));}
             }
-            LinearLayout frontBox=rowsBox();
-            for(int i=0;i<fr.size();i++)frontBox.addView(accessoryItem(fr.get(i),names.get(fr.get(i).id),frontBox,fr,i,rebuild[0]));
-            list.addView(frontBox,new LinearLayout.LayoutParams(-1,-2));
+            // uma lista só: acessórios (frente) > modelo > objetos (atrás) > paisagem
+            final int cnt=fr.size()+1+bk.size(),modelPos=fr.size();
+            int pos=0;
+            for(int i=0;i<fr.size();i++)list.addView(accessoryItem(fr.get(i),names.get(fr.get(i).id),list,pos++,cnt,modelPos,rebuild[0]));
             final boolean onF=on;
             LinearLayout mr=layerItem(modelThumb(),modelLabel(),!on);
             mr.setOnClickListener(v->showModelMenu(onF,dlg));
-            list.addView(mr);
-            LinearLayout backBox=rowsBox();
-            for(int i=0;i<bk.size();i++)backBox.addView(accessoryItem(bk.get(i),names.get(bk.get(i).id),backBox,bk,i,rebuild[0]));
-            list.addView(backBox,new LinearLayout.LayoutParams(-1,-2));
+            list.addView(mr);pos++;
+            for(int i=0;i<bk.size();i++)list.addView(accessoryItem(bk.get(i),names.get(bk.get(i).id),list,pos++,cnt,modelPos,rebuild[0]));
             LinearLayout sr=layerItem(sceneryThumb(),"paisagem",false);
             sr.setOnClickListener(v->showSceneryRowMenu(dlg));
             list.addView(sr);

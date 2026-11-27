@@ -134,6 +134,30 @@ public class OverlayService extends Service {
         return true;
     }
 
+    /**
+     * Arrastar na janela de Camadas: põe o acessório/objeto na frente ou atrás do modelo, na posição indicada
+     * (0 = o mais na frente do seu lado). Acessório (na frente) gruda no Vtuber; Objeto (atrás) fica fixo.
+     */
+    static boolean placeAccessory(final int id, final boolean back, final int indexFromTop) {
+        final OverlayService s = instance;
+        if (s == null) return false;
+        s.handler.post(new Runnable() { @Override public void run() {
+            Accessory a = s.accessoryById(id);
+            if (a == null) return;
+            s.accessories.remove(a);
+            a.back = back;
+            a.follow = !back;
+            java.util.ArrayList<Integer> side = new java.util.ArrayList<Integer>();
+            for (int i = 0; i < s.accessories.size(); i++) if (s.accessories.get(i).back == back) side.add(i);
+            int n = side.size();
+            int fromBottom = Math.max(0, Math.min(n, n - indexFromTop));
+            int at = fromBottom >= n ? (n == 0 ? s.accessories.size() : side.get(n - 1) + 1) : side.get(fromBottom);
+            s.accessories.add(at, a);
+            s.reorderWindows();
+        } });
+        return true;
+    }
+
     static boolean clearAccessories() {
         final OverlayService s = instance;
         if (s == null) return false;
@@ -428,6 +452,7 @@ public class OverlayService extends Service {
     private void setLayer(Accessory a, boolean back) {
         if (a.back == back) return;
         a.back = back;
+        a.follow = !back;
         reorderWindows();
     }
 
@@ -675,6 +700,7 @@ public class OverlayService extends Service {
         a.id = ++accSeq;
         a.path = path;
         a.back = back;
+        a.follow = !back;   // Acessório (na frente) gruda no Vtuber; Objeto (atrás) é fixo na tela
         try {
             wm.addView(a, a.p);
         } catch (Exception e) {
