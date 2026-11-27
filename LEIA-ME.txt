@@ -1,0 +1,212 @@
+VTUBER LAB V6.1
+
+Novidades:
+- Interface inicial redesenhada em estilo estúdio, com identidade preta/amarela.
+- Tela de loading com a logo oficial.
+- Verônica configurada como personagem padrão.
+- Tamanho do personagem livre: pinça com dois dedos sobre o modelo (sem limite máximo prático). Botões A−/A+/Tamanho removidos.
+- Tamanho da janela flutuante ampliado.
+- Importação ZIP aceita HTML principal em subpastas e procura vtuber.html/index.html recursivamente.
+- Validação de caminhos e limite de extração de 80 MB.
+- Mantidos calibragem, chroma verde, arrastar, ocultar controles e câmera.
+
+Build: manter todos os arquivos na raiz do repositório, incluindo .github/workflows/build.yml. O GitHub Actions executa Gradle assembleDebug e publica o APK.
+
+Nota: esta versão usa o vtuber.html fornecido no pacote Veronica_personagem.zip como personagem padrão. O importador continua aceitando pacotes HTML; o formato ClaudeRig/Fisic.js ainda não foi especificado como formato nativo.
+
+A compilação Android e o teste em dispositivo devem ser confirmados pelo GitHub Actions.
+
+NOVA GUI (design do usuário):
+- Tela inicial em modo paisagem: fundo amarelo com a logo V, 5 botões redondos à esquerda. Não existe mais modelo de prévia na tela inicial: a Vtuber real é só a janela flutuante (overlay), que agora começa no CENTRO da tela e pode ser arrastada para qualquer lugar.
+- Botões: ▶ gravar tela com áudio do microfone (toque de novo ou "Parar" na notificação para salvar em Filmes/VTuberLab) | camadas = liga/desliga o overlay | engrenagem = configurações do modelo (Calibrar, Verde, orientação da gravação, Voltar à Verônica e, no Pngtuber, trocar parado/falando) | setas = seletor de modelos, com categorias Vtuber / Pngtuber (ícones dos já importados, toque longo remove, "+" importa um ZIP novo na categoria aberta).
+- Novos arquivos na raiz (ui_*.png, ui_bg.jpg) são movidos para res/drawable pelo build.yml.
+
+PNGTUBER (novo):
+- Categoria Pngtuber no seletor de modelos (texto "Vtuber / Pngtuber" no rodapé da janela). Já vem a Verônica Pngtuber.
+- ZIP do Pngtuber = só 2 imagens (PNG/JPG/WEBP): uma parado (boca fechada) e outra falando. Fundo branco vira transparente sozinho.
+- Como o app sabe qual é qual: pelo nome (parado/calado/idle/closed/fechada x fala/falando/talk/open/aberta). Sem pista no nome, a 1ª em ordem alfabética é "parado" e a 2ª é "falando". Se ficar invertido: engrenagem > "Pngtuber: trocar parado/falando".
+- Usa o microfone: ao falar troca para a imagem "falando" e dá um pulinho. Calibrar (silêncio ~1 s) ajusta a sensibilidade.
+- Pngtuber pede permissão de microfone (não de câmera).
+- Microfone do Pngtuber: o manifesto agora declara MODIFY_AUDIO_SETTINGS (o WebView exige junto com RECORD_AUDIO) e a página tenta de novo sozinha, mostrando o motivo do erro no aviso.
+
+NOVO (modelos e botão +):
+- Toque longo num modelo do seletor abre uma janela: Exportar (salva um ZIP onde você escolher; o mesmo ZIP pode ser importado depois, no Pngtuber ou no Vtuber conforme o tipo) ou Deletar (ainda pede confirmação). A Verônica só pode ser exportada.
+- Novo botão + na coluna da esquerda: abre "Mais funções" com Collab (ainda em breve), Acessório e Trocar cenário.
+
+ATALHOS DO MODELO (só Vtuber):
+- Tocar no Vtuber (overlay, com o app aberto) mostra os atalhos do modelo. Modelo sem atalhos: nada aparece. As antigas Calibrar/Verde ficam na engrenagem; fechar o overlay é pelo botão de camadas.
+- No ZIP do Vtuber, crie a pasta Atalhos (ao lado do vtuber.html ou na raiz do ZIP) com o arquivo atalhos.json e as imagens dos botões:
+
+  {
+    "script": "sistema.js",
+    "atalhos": [
+      { "nome": "Feliz",  "imagem": "feliz.png",  "acao": "setExpression('feliz')" },
+      { "nome": "Chapéu", "imagem": "chapeu.png", "acao": "hat(true)", "desligar": "hat(false)" }
+    ]
+  }
+
+- "acao" é código JavaScript executado dentro da página do modelo ao tocar. Se existir "desligar", o botão alterna: 1º toque = acao, 2º toque = desligar.
+- "script" (opcional) é um .js da pasta Atalhos, carregado junto com a página: é o "sistema" dos atalhos (as funções que as ações chamam).
+- "imagem" é opcional; sem imagem o botão mostra o nome.
+
+ACESSÓRIO:
+- + > Acessório > Adicionar imagem (PNG com fundo transparente fica melhor, ex.: pipoca). A imagem aparece no centro: arraste para posicionar, pinça com dois dedos muda o tamanho, o × remove. O × some durante gravação. "Remover todos" limpa tudo. Precisa do overlay ligado.
+
+CENÁRIO:
+- + > Trocar cenário: "Do app" (Estúdio amarelo, Sem fundo verde) e "Importados" (suas imagens; toque longo remove).
+- O cenário é só o fundo da tela inicial do app (nunca cobre a tela fora do app). Padrão: Estúdio amarelo. "Sem fundo (verde)" = fundo verde.
+
+V10:
+- Janelas do app ficam NA FRENTE do Vtuber/PNGtuber e dos acessórios (eles ficam atrás, escurecidos). Só dentro do app.
+- Acessórios acompanham o modelo quando ele é arrastado.
+- Botão sem função (grupo) removido.
+
+V10.1 — LIVE NO YOUTUBE (RTMPS):
+- Gesto: deslize o botão ▶ para a DIREITA. Aparece "Deseja abrir Live?". Ao confirmar abre a tela de configuração. O toque normal no ▶ continua gravando como antes.
+- Tela de configuração: endereço do servidor RTMPS (padrão rtmps://a.rtmps.youtube.com:443/live2) e chave de transmissão do YouTube Studio (Transmitir ao vivo > Transmissão por software). Só aceita endereço que começa com rtmps://.
+- A chave é cifrada (AES-256-GCM, chave do Android Keystore) e nunca vai para log, Intent ou arquivo comum. "Apagar chave salva" remove tudo. A tela de configuração bloqueia captura de tela (FLAG_SECURE) enquanto está aberta.
+- Captura a tela inteira (MediaProjection) + microfone. Máximo 1280x720 (mantém o formato da tela), 30 FPS, H.264 + AAC 44,1 kHz estéreo, vídeo 4 Mbps, quadro-chave a cada 2 s (recomendação do YouTube). Usa a mesma opção "Gravação e Live: Paisagem/Retrato" da engrenagem.
+- Ao conectar, vai uma tela preta com "Esperando conexão..." durante 15 s; depois entra a tela real.
+- Sem indicador de LIVE no app: só a notificação obrigatória do Android, com o botão Parar. Também dá para encerrar tocando em ▶ (pede confirmação "Encerrar a Live?").
+- Cai a conexão: tenta reconectar até 5 vezes; se não voltar, encerra e avisa o motivo. Se o Android encerrar a captura de tela, a Live encerra.
+- Não dá para gravar e fazer Live ao mesmo tempo (as duas usam a captura de tela).
+- Biblioteca nova: RootEncoder 2.8.1 (JitPack). O build.yml agora também move LiveService.java, SecureStore.java e WaitingSource.java.
+- Não captura o áudio interno do celular (só o microfone).
+- Regras do YouTube: sua conta precisa ter transmissão ao vivo ativada (verificação do canal; a primeira ativação pode levar até 24 h). Não transmita conteúdo de terceiros sem direito, nem dados privados. Vale a Política da Comunidade, e é preciso marcar na transmissão se é "feita para crianças". Nunca mostre a chave de transmissão ao vivo.
+
+V12.1 — COLLAB (etapa 1: conexão por código em texto)
+- + > Collab. Anfitrião: "Criar sala" gera um código; "Copiar código" e mande ao amigo (WhatsApp/Discord).
+- Amigo: copia o código recebido e toca em "Entrar em sala (colar código)"; o app gera a resposta; "Copiar código" e devolve ao anfitrião.
+- Anfitrião: copia a resposta e toca em "Colar resposta do amigo". Conectado = mostra o ping.
+- Conexão direta (WebRTC DataChannel), sem servidor seu. Usa o STUN público do Google só para achar o caminho (LIGADO por padrão; toque longo no título "Collab" liga/desliga).
+- O app pede o microfone ao abrir o Collab (o Android só revela o endereço real da rede para a página de conexão com o microfone liberado).
+- Sem biblioteca nova (QR removido).
+- Próximas etapas: envio do modelo do amigo na entrada, movimentos em tempo real, sala de até 3, ligação com o overlay e a gravação.
+- Collab agora é uma janela no mesmo estilo de "Configurações do modelo" (painel escuro, botões amarelos, FECHAR). Criar sala / Entrar na sala, "seu código" + Copiar, "Resposta do amigo" (ou "Código do anfitrião") + Colar, e o status com o ping.
+- Texto do botão de gravação trocado para "Gravação do App: Paisagem/Retrato".
+- Ícones do Collab (mais, porta, copiar, check, wifi) recortados do desenho: ui_ico_plus.png, ui_ico_door.png, ui_ico_copy.png, ui_ico_check.png, ui_ico_wifi.png (ficam na raiz, junto dos outros ui_*.png). Botões Copiar/Colar refeitos menores, com ícone.
+
+V12.2 — CENÁRIOS POR SALA (etapa 1)
+- "Fundo" agora é "Cenário". Menu + > Cenários: escolha a sala (espera, conversa, normal, terminar) e o cenário dela. O cenário que aparece no app é o da sala atual (começa na Sala normal).
+- Importar: imagem ou MP4. Vídeo de até 5 segundos, mudo, em loop. Vídeo maior é recusado.
+- Segurar um cenário importado apaga (e as salas que usavam ele voltam ao estúdio amarelo).
+- Próximas etapas: transições (até 3 mudanças), camadas e animação dos acessórios, configurações, sala de espera na live.
+
+V12.3 — CHAT DA LIVE (YouTube)
+- Menu + > Chat. Cole o link da live (ou o ID) e toque em "Mostrar chat": uma janela flutuante mostra o chat pop-out do próprio YouTube (youtube.com/live_chat?is_popout=1&v=ID), sem API, sem chave e sem servidor.
+- Você escolhe a cor do nome, a cor da letra, o tamanho da letra e a transparência do fundo. "Mover chat" mostra uma barra amarela para arrastar e um canto para redimensionar; "Pronto" trava de novo (travado, o toque passa para o app de baixo).
+- Como a Live captura a tela inteira, o chat aparece na transmissão sozinho.
+- Precisa da permissão "exibir sobre outros apps" (a mesma do overlay).
+- Observação: o YouTube pode mudar o visual do chat; se as cores pararem de funcionar, é só ajustar o CSS em ChatService.injectStyle().
+
+V12.4 — LIVE (sala de espera sem limite, tela apagada, mutar)
+- Acabou a espera fixa de 15 s: ao conectar, a tela entra no ar na hora. Ao começar a Live, o app muda sozinho para a Sala de espera (o cenário dela) e, ao terminar, volta à sala que estava. Para começar, troque para a Sala normal em + > Cenários.
+- Tela do celular apagada (travada): a transmissão mostra "Sala de espera" em vez de ficar preta. Ao acender a tela, volta a captura. Mantém o processador acordado durante a Live (WAKE_LOCK, no máximo 6 h).
+- Notificação da Live: Parar e Mutar mic / Ativar mic.
+- Ainda falta: esconder o Vtuber na sala de espera, mostrar o cenário da sala de espera quando a tela apaga, atalhos de trocar de sala na notificação, guia da primeira vez.
+
+V12.5 — CRIAR PNGTUBER (2 imagens)
+- Troca de modelo > Pngtuber > "Criar": nome + 2 imagens (parado/boca fechada e falando/boca aberta). Fundo branco ou transparente. Não precisa mais montar um ZIP.
+- O ZIP fica só para compartilhar: segurar um personagem > Exportar gera o ZIP para mandar a um amigo, e "Importar ZIP" recebe o ZIP de um amigo.
+
+0.13.1 — A VERSÃO COMPLETA (o "V13" agora se chama 0.13.1)
+NOVO:
+- Collab (anfitrião + 1 convidado): depois de conectar, o convidado envia o modelo (ZIP em pedaços) e depois só os movimentos (8 números ~25x/s). O anfitrião vê "Você aceita (nome do modelo) na colaboração?". O modelo do convidado roda numa CAIXA ISOLADA (sem internet, sem ponte com o app), passa por um filtro de importação (tipos de arquivo, tamanho, sem sair da pasta) e por um TESTE DE MOVIMENTO (precisa reagir de verdade). A conexão vive num serviço: fechar a janela não derruba (use ENCERRAR).
+- Atalho de salas: faixa invisível na direita da tela; deslize para a esquerda e escolha a sala. Mudar de sala fora do app leva você de volta ao app.
+- Configurações do app (engrenagem > "Configurações do app"): botões laterais, atalho de salas, atalho só no app, sala de espera ao iniciar a live, esconder o Vtuber na sala de espera/tela final, STUN, transição (nenhuma, suave ou até 3 vídeos MP4 de até 5 s) e o guia da primeira vez.
+- Esconder o Vtuber e os acessórios na sala de espera e na tela final (liga/desliga nas configurações).
+- Acessórios: camadas (na frente ou atrás do modelo; segure um acessório para trocar; "Novos acessórios" no menu), e GIF/WebP animado (Android 9+).
+- Live: notificação com Parar, Mutar mic e Sala ▶ (passa para a próxima sala).
+- Guia da primeira vez (permissões) na primeira abertura.
+- Botões laterais escondidos: segure em qualquer lugar vazio da tela para mostrar de novo.
+NÃO FEITO AINDA:
+- Acessório "preso" a uma parte do modelo (a cabeça acompanhando a rotação): precisa que o modelo exponha a pose.
+- Cenário da sala de espera na transmissão quando a tela apaga (hoje é tela preta com o texto "Sala de espera").
+
+==========================================================
+PREPARAÇÃO PARA O LANÇAMENTO — ATUALIZAÇÕES, ASSINATURA E AJUSTES
+==========================================================
+1) ATUALIZAR POR CIMA (sem desinstalar)
+- O Android só instala uma versão por cima da outra se: (a) o applicationId for o mesmo (com.vtuber.overlay — NÃO MUDAR), (b) o APK for assinado com a MESMA chave, e (c) o versionCode for MAIOR.
+- versionCode: agora é automático no GitHub (1000 + número da execução do workflow), então sobe a cada build sozinho. O versionName (0.13.1) você muda à mão em app-build.gradle.txt quando quiser.
+- Assinatura: o build antigo usava uma chave de TESTE que o GitHub cria nova a cada execução, por isso um APK nunca conseguia atualizar o outro. Agora existe a chave fixa:
+  a) No GitHub: Actions > "gerar-chave" > Run workflow.
+  b) Quando terminar, baixe o artefato "chave-assinatura" (vale 1 dia). Dentro tem KEYSTORE_BASE64.txt e SENHAS.txt (e a chave vtuberlab.jks).
+  c) Em Settings > Secrets and variables > Actions, crie 4 secrets: KEYSTORE_BASE64 (conteúdo do KEYSTORE_BASE64.txt), KEYSTORE_PASSWORD, KEY_ALIAS e KEY_PASSWORD (valores do SENHAS.txt).
+  d) APAGUE o artefato e GUARDE uma cópia da chave (vtuberlab.jks) e das senhas num lugar seguro (nuvem pessoal). SE PERDER A CHAVE, NINGUÉM CONSEGUE MAIS ATUALIZAR POR CIMA (todos teriam que desinstalar). Nunca publique a chave no repositório.
+- ATENÇÃO — só na primeira vez: os APKs instalados até hoje foram assinados com chaves de teste diferentes. Ao passar para a chave fixa, desinstale a versão antiga UMA vez (os dados dela serão perdidos). Depois disso, todas as próximas versões atualizam por cima e mantêm modelos, cenários, acessórios e configurações.
+- Sem os 4 secrets, o build continua funcionando, mas sai assinado com chave de teste e o log do GitHub mostra um aviso amarelo ("Sem chave fixa").
+- Não existe atualização automática dentro do app (não há servidor/loja para isso ainda). A atualização é manual: baixar o APK novo e instalar por cima.
+
+2) DADOS PRESERVADOS NA ATUALIZAÇÃO
+- Os nomes das preferências ("vtuber", "settings", "collab", "chat") e das pastas (models, characters, sceneries, accessories) não mudam. O cenário antigo é lido como o cenário da Sala normal.
+- A chave da Live fica cifrada pelo Android Keystore e só sobrevive à atualização se a assinatura for a mesma.
+
+3) CONFIGURAÇÕES
+- Engrenagem > Configurações do app > "Restaurar" (com confirmação) volta as opções dessa tela ao padrão. NÃO apaga personagens, cenários, acessórios, vídeos de transição nem a chave da Live.
+
+4) CONFIRMAÇÕES DE SAÍDA
+- Collab: ENCERRAR e começar outra sala estando conectado pedem confirmação.
+- Live: o botão Encerrar do app já perguntava; agora o "Parar" da notificação também abre uma confirmação.
+
+5) INFORMAÇÕES
+- Configurações do app mostra a versão instalada e "Créditos e licenças" (RootEncoder, STUN do Google, WebRTC, MediaPipe, AndroidX, Kotlin).
+
+6) MENSAGENS DE ERRO
+- Câmera, microfone, Collab, Live e importações agora explicam o que aconteceu e o que fazer, sem nomes técnicos.
+
+ATENÇÃO (não mudei): o rastreamento do rosto da Verônica baixa o MediaPipe da internet (cdn.jsdelivr.net e storage.googleapis.com). Sem internet, o Vtuber não segue o rosto (agora o app avisa). Para funcionar offline seria preciso embutir esses arquivos no app.
+
+0.13.2 — CORREÇÃO
+- O atalho de salas (faixa invisível na direita) aparecia mesmo com o app em segundo plano e sem Vtuber. Agora ele só existe quando o app está aberto, o Vtuber está ligado ou a Live está no ar; com a opção "só funciona dentro do app", apenas com o app aberto. Sumindo o motivo, a faixa deixa de roubar toques da tela.
+
+0.13.3 — NOVA VERSÃO
+- Número da versão atualizado para 0.13.3 (aparece em Configurações do app > "Versão instalada" e em "Créditos e licenças").
+- O versionCode continua automático no GitHub (1000 + número da execução), então esta versão atualiza por cima da 0.13.2.
+- A nova Verônica (Veronica_nova_v3.zip, com a saia presa ao corpo) é um pacote de personagem: importe em Troca de modelo > Importar ZIP. Ela NÃO está embutida no app.
+
+1.13.4 — NOVA VERSÃO
+- Removido o atalho de salas (a faixa invisível na borda direita) e as duas opções dele em Configurações do app. A troca de sala continua pelo botão Cenários (aba de gravação) e pelo botão "Sala ▶" da notificação da Live.
+- Posição livre do Vtuber: agora dá para arrastar o modelo para fora da tela (por exemplo, mostrar só de cintura para cima). Sempre fica um pedaço visível para você puxar de volta. Os acessórios acompanham.
+- Número da versão: 1.13.4. O versionCode continua automático no GitHub, então atualiza por cima da 0.13.3.
+- DUAS ABAS na tela inicial (deslize para o lado; as bolinhas de baixo mostram em qual aba você está):
+  * Aba de criação (a que abre): Camadas (liga/desliga o Vtuber), Engrenagem, Trocar modelo, Collab e Comunidade. Saíram o Play e o "+".
+  * Aba de gravação: Play, Acessório, Cenários e Chat (as funções que estavam no "+", menos o Collab).
+- Play: toque rápido grava a tela (igual antes). Segurar por 10 segundos abre a Live (aparece "Deseja abrir Live?"). Depois de 1,5 s segurando aparece um aviso. O gesto antigo de deslizar o Play para a direita foi removido.
+- Comunidade: por enquanto só mostra "Em breve". Na próxima etapa os modelos virão de um repositório público do GitHub.
+- Ícones novos: ui_accessory.png, ui_scenery.png e ui_chat.png (mesmo estilo preto/amarelo).
+- NOVA VERÔNICA (v3, saia presa na cintura) agora é o personagem padrão, embutida no app. Os atalhos dela (Energético e Careca) já vêm junto: toque no modelo para aparecerem. O ícone dela no seletor também foi trocado. "Voltar à Verônica (padrão)" e Exportar usam a versão nova.
+- PAISAGEM E RETRATO: o app, o menu de configurações, o Collab e o Chat agora giram com o aparelho. A tela inicial se refaz ao girar e o Vtuber é trazido de volta se sair da área visível.
+- Gravação e Live: a opção na engrenagem agora tem 3 modos que alternam ao tocar: Automático (usa a posição do app na hora de começar), Paisagem ou Retrato. O padrão é Automático.
+
+1.13.5 — APP REFORMULADO
+- ABA DE GRAVAÇÃO: agora é só o botão vermelho (anel branco + bolinha vermelha, como em rede social). Toque rápido grava; enquanto grava a bolinha vira quadradinho e pulsa; toque de novo para parar. Segurar 10 segundos abre a Live (igual antes). Saíram Acessório, Cenários e Chat dessa aba.
+- BOTÕES CENTRALIZADOS: os botões das duas abas ficam no mesmo eixo (antes a aba de gravação ficava presa no topo e parecia torta).
+- JANELA DE CAMADAS (botão Camadas, aba de criação): uma janela só com
+  * NA FRENTE: objetos na frente do Vtuber (+ Adicionar objeto na frente)
+  * VTUBER: fica no meio, não muda de camada; aqui está o Ligar/Desligar
+  * ATRÁS: objetos atrás do Vtuber (+ Adicionar objeto atrás)
+  * FUNDO: Trocar abre os cenários (salas) como antes
+  * Chat da live: abre a janela do chat
+  Cada objeto tem o botão ↓ Atrás / ↑ Frente (muda de camada) e ✕ (remove).
+- OBJETOS (acessórios): arrastar move, pinça muda o tamanho, TOQUE RÁPIDO REMOVE. Funciona também fora do app: se você sair do app com um objeto na tela, ele continua lá e some ao tocar nele. Saíram o × e o toque longo (a camada agora é escolhida na janela).
+  Atenção: fora do app o objeto recebe o toque na área dele (não passa para o app de baixo).
+- PREVIEW DO MODELO (estilo VTube Studio): no seletor de modelos o ícone agora é o próprio modelo rodando numa mini janela (parado, sem câmera e sem internet). Pngtuber mostra a própria imagem "parado". Acabaram as imagens de ícone: ui_icon_veronica.png, ui_icon_pngtuber.png, ui_play.png, ui_accessory.png, ui_scenery.png e ui_chat.png foram removidas do projeto, e o app não cria mais icon.png ao importar.
+- Número da versão: 1.13.5. O versionCode continua automático no GitHub (atualiza por cima da 1.13.4).
+
+1.13.13 — VISUAL "KAWAII PRO" (ícones, Modelos e Camadas)
+- ÍCONES NOVOS (aba de criação): os botões Camadas, Engrenagem, Trocar modelo, Collab e Comunidade agora usam as imagens do desenho Kawaii Pro (quadradinho branco de bordas suaves, contorno escuro e detalhes amarelos). São os arquivos ui_layers.png, ui_gear.png, ui_swap.png, ui_collab.png e ui_group.png, recortados do desenho (256x256, cantos transparentes). Para trocar um ícone no futuro, é só substituir o PNG com o mesmo nome.
+- JANELA DE MODELOS REFEITA: título "Modelos" com botão amarelo redondo de fechar, busca com lupa ("Filtrar modelos..."), abas Vtuber / Pngtuber em pílula (a ativa em amarelo), grade de cartões com o preview do modelo em fundo claro e o nome embaixo (modelo em uso = borda amarela), e botões arredondados embaixo: Pngtuber = "Criar novo" (amarelo) + "Importar ZIP"; Vtuber = "Importar". Os "+" que ficavam dentro da lista saíram. Em paisagem a busca e as abas ficam na mesma linha. Segurar um modelo continua abrindo Editar / Exportar / Deletar.
+- Janelas do app com cantos mais arredondados.
+- Botões laterais: agora são quadrados (antes eram um pouco mais largos que altos), no mesmo tamanho de altura.
+- PREVIEW DOS VTUBERS PARADO: no seletor de modelos o Vtuber não se mexe mais sozinho. Sem câmera, a página do modelo fazia um "olhar aleatório" a cada poucos segundos e piscava; agora o app desliga isso, espera o modelo aparecer (cerca de 1,5 s; 3 s em modelos importados de outro formato) e congela o quadro. Só vale para a miniatura: o Vtuber do overlay continua normal.
+- CAMADAS EM PAINEL LATERAL: a janela de Camadas agora abre deslizando pela direita, com 4 grupos que recolhem pela setinha (o estado fica lembrado): Acessórios (objetos NA FRENTE do Vtuber), PNGtuber (nome do modelo + Ligar/Desligar), Objeto (objetos ATRÁS do Vtuber) e paisagem (Fundo + Chat da live). O "+" no cabeçalho de Acessórios e de Objeto adiciona um objeto na frente/atrás. Cada objeto tem um "⋯" com: Seguir/Fixar, Mandar para trás/frente e Remover. SEGURAR e ARRASTAR um objeto muda a ordem dentro do grupo (o de cima fica mais na frente). Tocar fora do painel ou no X fecha.
+- Número da versão: 1.13.13 (o versionCode continua automático no GitHub).
+
+1.13.14 — JANELA COLLAB NOVA E CAMADAS COMO LISTA
+- COLLAB NOVO: cabeçalho "Colabore com amigos!" com o ícone das duas pessoas, botões Criar Sala e Entrar Sala, cartão "Seu Código" (mostra --- até existir código; o ícone de copiar copia) e cartão "Código do Amigo" (campo "Digite o código..." e seta para enviar; com o campo vazio a seta pega o código copiado, como o antigo Colar) e "Sair" no rodapé. Em tela estreita os dois cartões ficam um embaixo do outro. ENCERRAR e o aviso de conexão só aparecem quando há sala/conexão. Toque longo no título continua ligando/desligando o STUN.
+- ÍCONES REFEITOS (ficavam tortos): ui_cb_people, ui_cb_plus, ui_cb_enter, ui_cb_ticket, ui_cb_useradd, ui_cb_copy, ui_cb_go, ui_cb_back e ui_cb_wifi, desenhados com formas retas e cantos redondos certinhos. Os ui_ico_*.png antigos saíram. O build.yml não mudou: qualquer ui_*.png novo já entra sozinho.
+- CAMADAS AGORA SÃO CAMADAS, NÃO PASTAS: uma lista só, sem grupos que recolhem. Cabeçalho com "+" (nova camada) e X. Cada linha tem um quadrado com a imagem e o nome. Acessório e Objeto NÃO vêm de fábrica: a pessoa adiciona pelo "+" (Acessório = na frente do modelo, Objeto = atrás). Sempre existem só o modelo e a paisagem.
+- O nome da linha do modelo segue a escolha: "Vtuber" se o modelo escolhido é Vtuber e "PNGtuber" se é PNGtuber. A miniatura dele é a própria imagem do modelo (a mesma do seletor), e a da paisagem é o cenário atual.
+- Toque numa camada abre as opções (Acessório/Objeto: seguir/fixar, mandar para frente/trás, remover; modelo: ligar/desligar; paisagem: trocar fundo e chat da live). Segurar e arrastar muda a ordem dentro de Acessórios ou de Objetos. Modelo desligado fica meio apagado na lista.
+- Número da versão: 1.13.14 (o versionCode continua automático no GitHub).

@@ -1,0 +1,132 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Collab</title></head><body>
+<script>
+// VTuber Lab — Collab: WebRTC DataChannel sem servidor. A troca de dados de conexão é feita por código de texto.
+// Canal "vl": confiável (mensagens, modelo em pedaços). Canal "mov": rápido, aceita perder pacote (movimentos).
+let pc=null,dc=null,mv=null,mic=null,sending=false;
+const ev=(t,d)=>{try{AndroidCollab.onEvent(t,d==null?'':String(d))}catch(e){}};
+// Traduz erros técnicos para uma frase que explica o que aconteceu e o que fazer.
+function friendly(e){
+  const m=String(e&&typeof e==='object'?((e.name||'')+' '+(e.message||'')):(e||''));
+  if(/NotAllowedError|permission/i.test(m))return 'O VTuber Lab não tem permissão para o microfone. Permita o microfone nas configurações do celular e crie a sala de novo.';
+  if(/Nenhum endereço de rede/.test(m))return 'Não consegui descobrir o endereço do seu celular na internet. Confira se o Wi-Fi ou os dados móveis estão ligados, permita o microfone e crie a sala de novo.';
+  if(/atob|decoded|JSON|Unexpected|undefined|Cannot read|not iterable|not valid/i.test(m))return 'O código está incompleto ou foi alterado. Copie o código inteiro de novo e cole.';
+  if(/setRemoteDescription|setLocalDescription|SDP|InvalidState|OperationError|InvalidAccess|Failed to execute/i.test(m))return 'Esse código não combina com esta sala. Gere um código novo e tente de novo.';
+  if(/envio do modelo/.test(m))return 'O envio do modelo foi interrompido. Verifique a conexão e tente de novo.';
+  return 'Algo deu errado no Collab. Crie a sala de novo e tente outra vez.';
+}
+const b64=s=>btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unb64=s=>atob(s.replace(/-/g,'+').replace(/_/g,'/'));
+const bufToB64=buf=>{const u=new Uint8Array(buf);let s='';const C=0x8000;for(let i=0;i<u.length;i+=C)s+=String.fromCharCode.apply(null,u.subarray(i,i+C));return btoa(s)};
+const b64ToBuf=b=>{const bin=atob(b);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u.buffer};
+
+// Tirar a máscara mDNS dos endereços locais (o Chromium só mostra o IP real se a página tiver acesso ao microfone).
+async function unmask(){
+  if(mic)return;
+  try{mic=await navigator.mediaDevices.getUserMedia({audio:true})}catch(e){ev('warn','O microfone não foi permitido. Sem ele a conexão pode falhar: permita o microfone para o VTuber Lab nas configurações do celular.')}
+}
+function newPc(stun){
+  pc=new RTCPeerConnection({iceServers:stun?[{urls:'stun:stun.l.google.com:19302'}]:[]});
+  pc.onconnectionstatechange=()=>{ev('state',pc.connectionState);if(pc.connectionState==='failed')ev('failed','')};
+}
+function gathered(){
+  return new Promise(r=>{
+    if(pc.iceGatheringState==='complete')return r();
+    const t=setTimeout(r,5000);
+    pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState==='complete'){clearTimeout(t);r()}});
+  });
+}
+function wire(ch){
+  dc=ch;dc.binaryType='arraybuffer';
+  dc.onopen=()=>ev('open','');
+  dc.onclose=()=>ev('closed','');
+  dc.onmessage=e=>{
+    if(typeof e.data!=='string'){try{AndroidCollab.onChunk(bufToB64(e.data))}catch(x){}return}
+    let m=null;try{m=JSON.parse(e.data)}catch(x){}
+    if(m&&m.t==='ping'){dc.send(JSON.stringify({t:'pong',ts:m.ts}));return}
+    if(m&&m.t==='pong'){ev('rtt',Date.now()-m.ts);return}
+    ev('msg',e.data);
+  };
+}
+function wireMov(ch){
+  mv=ch;
+  mv.onmessage=e=>{if(typeof e.data==='string'){try{AndroidCollab.onPose(e.data)}catch(x){}}};
+}
+// Reduz o SDP ao mínimo (senha, impressão digital, endereços) para caber num código curto.
+function pack(sdp){
+  const L=sdp.split(/\r?\n/);
+  const g=k=>{const l=L.find(x=>x.startsWith(k));return l?l.slice(k.length):''};
+  const u=g('a=ice-ufrag:'),p=g('a=ice-pwd:'),f=g('a=fingerprint:sha-256 ').replace(/:/g,'').toLowerCase();
+  const c=[];
+  for(const l of L){
+    if(!l.startsWith('a=candidate:'))continue;
+    const t=l.split(' ');
+    if(t[2].toLowerCase()!=='udp')continue;
+    const ip=t[4],port=+t[5],typ=t[7];
+    if(ip.endsWith('.local')||/^fe80/i.test(ip))continue;
+    if(typ!=='host'&&typ!=='srflx')continue;
+    c.push([ip,port,typ==='srflx'?1:0]);
+  }
+  if(!c.length)throw new Error('Nenhum endereço de rede disponível (sem IPv6/Wi-Fi, ou microfone negado).');
+  return 'VL1:'+b64(JSON.stringify({u,p,f,c}));
+}
+function build(str,setup){
+  const o=JSON.parse(unb64(str.replace(/^VL1:/,'')));
+  const fp=o.f.match(/../g).join(':').toUpperCase();
+  const s=['v=0','o=- 1 2 IN IP4 127.0.0.1','s=-','t=0 0','a=group:BUNDLE 0','a=msid-semantic: WMS',
+    'm=application 9 UDP/DTLS/SCTP webrtc-datachannel','c=IN IP4 0.0.0.0',
+    'a=ice-ufrag:'+o.u,'a=ice-pwd:'+o.p,'a=fingerprint:sha-256 '+fp,'a=setup:'+setup,'a=mid:0','a=sctp-port:5000','a=max-message-size:262144'];
+  o.c.forEach((c,i)=>s.push('a=candidate:'+(i+1)+' 1 udp '+(2113937151-i)+' '+c[0]+' '+c[1]+' typ '+(c[2]?'srflx raddr 0.0.0.0 rport 0':'host')));
+  s.push('a=end-of-candidates');
+  return s.join('\r\n')+'\r\n';
+}
+async function collabHost(stun){
+  try{
+    collabClose(true);await unmask();newPc(stun);
+    wire(pc.createDataChannel('vl',{ordered:true}));
+    wireMov(pc.createDataChannel('mov',{ordered:false,maxRetransmits:0}));
+    await pc.setLocalDescription(await pc.createOffer());
+    await gathered();
+    ev('offer',pack(pc.localDescription.sdp));
+  }catch(e){ev('error',friendly(e))}
+}
+async function collabAccept(str){
+  try{await pc.setRemoteDescription({type:'answer',sdp:build(str,'active')});ev('state','connecting')}
+  catch(e){ev('error',friendly(e))}
+}
+async function collabJoin(str,stun){
+  try{
+    collabClose(true);await unmask();newPc(stun);
+    pc.ondatachannel=e=>{if(e.channel.label==='mov')wireMov(e.channel);else wire(e.channel)};
+    await pc.setRemoteDescription({type:'offer',sdp:build(str,'actpass')});
+    await pc.setLocalDescription(await pc.createAnswer());
+    await gathered();
+    ev('answer',pack(pc.localDescription.sdp));
+  }catch(e){ev('error',friendly(e))}
+}
+function collabPing(){if(dc&&dc.readyState==='open')dc.send(JSON.stringify({t:'ping',ts:Date.now()}))}
+function collabSend(s){if(dc&&dc.readyState==='open')dc.send(s)}
+function collabPose(s){if(mv&&mv.readyState==='open')mv.send(s)}
+// Envia o arquivo do modelo em pedaços de 16 KB; o Java entrega cada pedaço em base64 por nextChunk().
+function collabSendFile(){
+  if(sending||!dc)return;
+  sending=true;
+  dc.bufferedAmountLowThreshold=256*1024;
+  const pump=()=>{
+    try{
+      while(dc&&dc.readyState==='open'&&dc.bufferedAmount<1024*1024){
+        const b=AndroidCollab.nextChunk();
+        if(!b){dc.send(JSON.stringify({t:'fileend'}));sending=false;dc.onbufferedamountlow=null;return}
+        dc.send(b64ToBuf(b));
+      }
+    }catch(e){sending=false;ev('error',friendly(new Error('envio do modelo')))}
+  };
+  dc.onbufferedamountlow=pump;
+  pump();
+}
+function collabClose(keepMic){
+  try{dc&&dc.close()}catch(e){} try{mv&&mv.close()}catch(e){} try{pc&&pc.close()}catch(e){}
+  dc=null;mv=null;pc=null;sending=false;
+  if(!keepMic&&mic){mic.getTracks().forEach(t=>t.stop());mic=null}
+}
+</script></body></html>

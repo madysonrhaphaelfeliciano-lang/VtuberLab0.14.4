@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Pngtuber</title>
+<style>
+html,body{margin:0;height:100%;background:transparent;overflow:hidden;touch-action:none}
+html.green,html.green body{background:#00b140}
+#char{position:fixed;left:0;right:0;bottom:0;top:12%;will-change:transform}
+#char canvas{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;object-position:center bottom}
+#msg{position:fixed;left:6px;top:4px;font:12px sans-serif;color:#fff;background:rgba(0,0,0,.55);padding:3px 7px;border-radius:8px;display:none}
+</style></head><body>
+<div id="char"></div>
+<div id="msg"></div>
+<script>
+// O app troca __IDLE__ e __TALK__ pelas duas imagens do modelo (parado e falando).
+window.PNG={idle:"__IDLE__",talk:"__TALK__"};
+const MAXSIDE=1024;
+const $char=document.getElementById('char'),$msg=document.getElementById('msg');
+function micMsg(e){const n=(e&&e.name)||'';
+  if(n==='NotAllowedError'||n==='SecurityError')return 'O microfone está bloqueado. Permita o microfone para o VTuber Lab nas configurações do celular.';
+  if(n==='NotFoundError')return 'Nenhum microfone foi encontrado neste celular.';
+  if(n==='NotReadableError'||n==='AbortError')return 'O microfone está sendo usado por outro app. Feche o outro app para o Pngtuber falar.';
+  return 'Não consegui usar o microfone. Vou tentar de novo.'}
+function say(t,ms){$msg.textContent=t;$msg.style.display='block';clearTimeout(say.t);if(ms)say.t=setTimeout(()=>$msg.style.display='none',ms)}
+
+async function loadImg(src){const i=new Image();i.src=src;await i.decode();return i}
+// Desenha a imagem (reduzida) num canvas e, se o fundo for branco opaco, deixa transparente (preenche a partir das bordas).
+function prepare(img){
+  const k=Math.min(1,MAXSIDE/Math.max(img.naturalWidth,img.naturalHeight));
+  const w=Math.max(1,Math.round(img.naturalWidth*k)),h=Math.max(1,Math.round(img.naturalHeight*k));
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(img,0,0,w,h);
+  const id=g.getImageData(0,0,w,h),d=id.data;
+  const bg=i=>d[i+3]>=250&&d[i]>=232&&d[i+1]>=232&&d[i+2]>=232;
+  if(bg(0)||bg((w-1)*4)||bg((h-1)*w*4)||bg(((h-1)*w+w-1)*4)){
+    const seen=new Uint8Array(w*h),q=new Int32Array(w*h);let qs=0,qe=0;
+    const push=p=>{if(!seen[p]&&bg(p*4)){seen[p]=1;q[qe++]=p}};
+    for(let x=0;x<w;x++){push(x);push((h-1)*w+x)}
+    for(let y=0;y<h;y++){push(y*w);push(y*w+w-1)}
+    while(qs<qe){const p=q[qs++],x=p%w,y=(p-x)/w;d[p*4+3]=0;
+      if(x>0)push(p-1);if(x<w-1)push(p+1);if(y>0)push(p-w);if(y<h-1)push(p+w)}
+    g.putImageData(id,0,0);
+  }
+  return c;
+}
+function bbox(c){
+  const w=c.width,h=c.height,d=c.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
+  let x0=w,y0=h,x1=-1,y1=-1;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(d[(y*w+x)*4+3]>10){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+  return x1<0?[0,0,w,h]:[x0,y0,x1+1,y1+1];
+}
+function crop(c,b){const o=document.createElement('canvas');o.width=b[2]-b[0];o.height=b[3]-b[1];o.getContext('2d').drawImage(c,b[0],b[1],o.width,o.height,0,0,o.width,o.height);return o}
+
+let idleC,talkC,talking=false,exprI=null,exprT=null,exprTok=0,ref=null;
+function setTalking(t){talking=t;if(!idleC)return;
+  if(exprI){idleC.style.visibility='hidden';talkC.style.visibility='hidden';exprI.style.visibility=t?'hidden':'visible';exprT.style.visibility=t?'visible':'hidden';return}
+  idleC.style.visibility=t?'hidden':'visible';talkC.style.visibility=t?'visible':'hidden'}
+// Atalho: troca o par parado/falando por outro par. setExpr(null) volta ao normal.
+window.setExpr=async function(a,b){
+  const tok=++exprTok;
+  if(exprI){exprI.remove();exprT.remove();exprI=exprT=null}
+  if(!a){setTalking(talking);return}
+  try{
+    const ca=prepare(await loadImg(a)),cb=prepare(await loadImg(b||a));
+    if(tok!==exprTok)return;
+    const fit=c=>(ref&&ref.u&&c.width===ref.w&&c.height===ref.h)?crop(c,ref.u):crop(c,bbox(c));
+    exprI=fit(ca);exprT=fit(cb);$char.appendChild(exprI);$char.appendChild(exprT);setTalking(talking);
+  }catch(e){setTalking(talking);say('Não consegui abrir as imagens do atalho.',2500)}
+};
+function hop(){$char.animate([{transform:'translateY(0)'},{transform:'translateY(-7%)',offset:.4},{transform:'translateY(0)'}],{duration:220,easing:'ease-out'})}
+
+async function init(){
+  try{
+    const [a,b]=await Promise.all([loadImg(window.PNG.idle),loadImg(window.PNG.talk)]);
+    let ci=prepare(a),ct=prepare(b);
+    ref={w:ci.width,h:ci.height,u:null};
+    const ba=bbox(ci),bb=bbox(ct);
+    // mesma área de corte nas duas imagens para o personagem não "andar" ao trocar
+    if(ci.width===ct.width&&ci.height===ct.height){const u=[Math.min(ba[0],bb[0]),Math.min(ba[1],bb[1]),Math.max(ba[2],bb[2]),Math.max(ba[3],bb[3])];ref.u=u;ci=crop(ci,u);ct=crop(ct,u)}
+    else{ci=crop(ci,ba);ct=crop(ct,bb)}
+    idleC=ci;talkC=ct;$char.appendChild(idleC);$char.appendChild(talkC);setTalking(false);
+  }catch(e){say('Não consegui abrir as imagens deste Pngtuber. Recrie-o com duas imagens PNG.');return}
+  startMic();
+}
+
+// ---- voz ----
+let analyser,buf,ac,thr=0.035,avg=0,lastLoud=0,lastHop=0,cal=null,ticking=false,peak=0,floor=0.01;
+async function startMic(){
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    if(!ac)ac=new (window.AudioContext||window.webkitAudioContext)();
+    if(ac.resume)ac.resume();
+    analyser=ac.createAnalyser();analyser.fftSize=1024;ac.createMediaStreamSource(s).connect(analyser);
+    buf=new Float32Array(analyser.fftSize);
+    const t=s.getAudioTracks()[0];if(t)t.onended=()=>{analyser=null;setTimeout(startMic,1000)};
+    $msg.style.display='none';
+    if(!ticking){ticking=true;requestAnimationFrame(tick)}
+  }catch(e){
+    say(micMsg(e));
+    setTimeout(startMic,2000);
+  }
+}
+function tick(){
+  if(!analyser){requestAnimationFrame(tick);return}
+  if(ac&&ac.state==='suspended'&&ac.resume)ac.resume();
+  analyser.getFloatTimeDomainData(buf);
+  let sum=0;for(let i=0;i<buf.length;i++)sum+=buf[i]*buf[i];
+  const rms=Math.sqrt(sum/buf.length),now=performance.now();
+  if(cal){cal.push(rms);if(now>cal.end){const m=cal.reduce((x,y)=>x+y,0)/cal.length;thr=Math.max(0.02,m*2.2+0.015);cal=null;say('Calibrado.',1200)}}
+  else{
+    avg=avg*0.9+rms*0.1;
+    // O limite se adapta ao volume real da voz: se o microfone chega mais baixo (ex.: durante a gravação), ele desce junto.
+    peak=Math.max(rms,peak*0.9996);
+    floor+=(rms-floor)*(rms<floor?0.2:0.0002);
+    const eff=Math.max(floor*2.5+0.004,Math.min(thr,peak*0.4));
+    if(rms>eff){
+      lastLoud=now;
+      if(!talking){setTalking(true);hop();lastHop=now}
+      else if(rms>avg*1.8&&rms>eff*1.6&&now-lastHop>280){hop();lastHop=now}
+    }else if(talking&&now-lastLoud>150)setTalking(false);
+  }
+  requestAnimationFrame(tick);
+}
+// Calibrar: fique em silêncio ~1,2 s; o limite de voz passa a ficar acima do ruído do ambiente.
+window.calibrate=()=>{if(!analyser)return;cal=[];cal.end=performance.now()+1200;say('Fique em silêncio...',1300)};
+window.toggleGreen=()=>document.documentElement.classList.toggle('green');
+init();
+</script></body></html>

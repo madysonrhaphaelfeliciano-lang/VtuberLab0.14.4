@@ -1,0 +1,58 @@
+plugins {
+    id 'com.android.application'
+}
+
+// versionCode: no GitHub Actions vale 1000 + o número da execução, então SEMPRE cresce a cada build
+// (o Android só deixa instalar por cima uma versão com versionCode maior). Fora do GitHub, usa 13.
+def ciRun = System.getenv('GITHUB_RUN_NUMBER')
+def appVersionCode = ciRun ? (1000 + Integer.parseInt(ciRun)) : 13
+
+android {
+    namespace 'com.vtuber.overlay'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.vtuber.overlay'   // NÃO MUDAR: é o que permite atualizar por cima
+        minSdk 26
+        targetSdk 34
+        versionCode appVersionCode
+        versionName '1.13.14'
+    }
+
+    // Chave fixa vinda do ambiente (Secrets do GitHub). Sem ela, o build de release não é assinado.
+    signingConfigs {
+        release {
+            if (System.getenv('KEYSTORE_FILE')) {
+                storeFile file(System.getenv('KEYSTORE_FILE'))
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (System.getenv('KEYSTORE_FILE')) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+    // Live no YouTube (RTMPS + captura de tela). Versão estável mais recente verificada: 2.8.1
+    implementation 'com.github.pedroSG94.RootEncoder:library:2.8.1'
+}
