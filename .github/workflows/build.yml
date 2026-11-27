@@ -1,0 +1,57 @@
+name: build
+on: [push, workflow_dispatch]
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+      - name: Montar pastas
+        run: |
+          mkdir -p app/src/main/java/com/vtuber/overlay app/src/main/assets app/src/main/res/drawable
+          mv build.gradle.txt build.gradle
+          mv settings.gradle.txt settings.gradle
+          mv gradle.properties.txt gradle.properties
+          mv app-build.gradle.txt app/build.gradle
+          mv MainActivity.java OverlayService.java RecordService.java LiveService.java SecureStore.java WaitingSource.java CollabActivity.java ChatActivity.java ChatService.java AppSettings.java CollabService.java OnboardingActivity.java SettingsActivity.java Friendly.java ConfirmStopActivity.java app/src/main/java/com/vtuber/overlay/
+          mv vtuber.html pngtuber.html collab.html png_idle.png png_talk.png default_atalhos.json default_careca.png default_energetico.png app/src/main/assets/
+          mv ic_launcher.png ui_*.png ui_*.jpg app/src/main/res/drawable/
+          mv AndroidManifest.xml app/src/main/
+      - name: Chave de assinatura
+        id: sign
+        env:
+          KS: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/vtuberlab.jks"
+            echo "has=true" >> "$GITHUB_OUTPUT"
+            echo "ks=$RUNNER_TEMP/vtuberlab.jks" >> "$GITHUB_OUTPUT"
+          else
+            echo "has=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Sem chave fixa::Este APK foi assinado com uma chave de teste que muda a cada build. Ele NAO atualiza por cima da versao anterior. Rode o workflow gerar-chave e cadastre os Secrets."
+          fi
+      - name: Compilar (assinado com a chave fixa)
+        if: steps.sign.outputs.has == 'true'
+        env:
+          KEYSTORE_FILE: ${{ steps.sign.outputs.ks }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle assembleRelease --no-daemon
+      - name: Compilar (sem chave fixa)
+        if: steps.sign.outputs.has != 'true'
+        run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vtuber-apk
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          
