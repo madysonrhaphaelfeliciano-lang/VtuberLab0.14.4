@@ -1,0 +1,16 @@
+{
+  "atalhos": [
+    {
+      "nome": "Energético",
+      "imagem": "energetico.png",
+      "acao": "setEnergetico(true)",
+      "desligar": "setEnergetico(false)"
+    },
+    {
+      "nome": "Careca",
+      "imagem": "careca.png",
+      "acao": "setCareca(true)",
+      "desligar": "setCareca(false)"
+    }
+  ]
+}
